@@ -1,32 +1,38 @@
 package server
 
-import "net/http"
+import (
+	"net/http"
 
-// NewRouter wires all HTTP routes to their respective handlers.
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
+)
+
+// NewRouter builds and returns the application router.
 func NewRouter(h *Handler) http.Handler {
-	mux := http.NewServeMux()
+	r := chi.NewRouter()
+	r.Use(middleware.Recoverer)
+	r.Use(middleware.RequestID)
 
-	// Capture incoming webhooks on any path under /hook/
-	mux.HandleFunc("/hook/", h.handleCaptureWebhook)
+	// Capture all incoming webhooks
+	r.Post("/webhook/{path:.*}", h.handleCapture)
 
-	// Inspect captured requests
-	mux.HandleFunc("/requests", h.handleListRequests)
-	mux.HandleFunc("/requests/", h.handleGetRequest)
+	// Inspection
+	r.Get("/requests", h.handleList)
+	r.Get("/requests/{id}", h.handleGet)
 
-	// Filter requests by method, path prefix, or header
-	mux.HandleFunc("/filter", h.handleFilterRequests)
+	// Filter, search, tag
+	r.Get("/requests/filter", h.handleFilterRequests)
+	r.Get("/requests/search", h.handleSearchRequests)
+	r.Get("/requests/tag", h.handleTagRequests)
 
-	// Full-text search across body, headers, and path
-	mux.HandleFunc("/search", h.handleSearchRequests)
+	// Replay
+	r.Post("/requests/{id}/replay", h.handleReplay)
 
-	// Replay a captured request to a target URL
-	mux.HandleFunc("/replay/", h.handleReplay)
+	// Export
+	r.Get("/requests/export", handleExportRequests(h.store))
 
-	// Export captured requests as JSON or NDJSON
-	mux.HandleFunc("/export", handleExportRequests(h.store))
+	// Stats
+	r.Get("/stats", h.handleStats)
 
-	// Aggregated stats
-	mux.HandleFunc("/stats", h.handleStats)
-
-	return mux
+	return r
 }

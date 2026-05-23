@@ -12,6 +12,19 @@ import (
 	"hookwatch/internal/storage"
 )
 
+// hopByHopHeaders lists headers that should not be forwarded during replay,
+// as they are meaningful only for a single transport-level connection.
+var hopByHopHeaders = map[string]struct{}{
+	"Connection":          {},
+	"Keep-Alive":          {},
+	"Proxy-Authenticate":  {},
+	"Proxy-Authorization": {},
+	"Te":                  {},
+	"Trailers":            {},
+	"Transfer-Encoding":   {},
+	"Upgrade":             {},
+}
+
 // ReplayResult holds the outcome of a replayed webhook request.
 type ReplayResult struct {
 	RequestID  string        `json:"request_id"`
@@ -64,6 +77,9 @@ func doReplay(req *storage.Request, targetURL string) (*ReplayResult, error) {
 
 	// Copy original headers, excluding hop-by-hop headers.
 	for key, values := range req.Headers {
+		if _, skip := hopByHopHeaders[key]; skip {
+			continue
+		}
 		for _, v := range values {
 			outbound.Header.Add(key, v)
 		}

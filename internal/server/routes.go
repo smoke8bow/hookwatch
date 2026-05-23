@@ -1,25 +1,36 @@
 package server
 
 import (
-	"github.com/go-chi/chi/v5"
-	"github.com/go-chi/chi/v5/middleware"
+	"net/http"
+
+	"github.com/user/hookwatch/internal/storage"
 )
 
-func NewRouter(h *Handler) *chi.Mux {
-	r := chi.NewRouter()
-	r.Use(middleware.Logger)
-	r.Use(middleware.Recoverer)
+func NewRouter(store *storage.Store, stats *Stats) http.Handler {
+	mux := http.NewServeMux()
 
-	// Webhook capture endpoint
-	r.Post("/hooks/{path:.*}", h.handleCapture)
+	h := NewHandler(store, stats)
 
-	// Request inspection endpoints
-	r.Get("/requests", h.handleListRequests)
-	r.Get("/requests/filter", h.handleFilterRequests)
-	r.Get("/requests/{id}", h.handleGetRequest)
+	// Capture incoming webhooks
+	mux.HandleFunc("/webhook/", h.CaptureWebhook)
 
-	// Replay endpoint
-	r.Post("/requests/{id}/replay", h.handleReplay)
+	// List all captured requests
+	mux.HandleFunc("/requests", h.ListRequests)
 
-	return r
+	// Get a specific request by ID
+	mux.HandleFunc("/requests/", h.GetRequest)
+
+	// Filter requests
+	mux.HandleFunc("/requests/filter", handleFilterRequests(store))
+
+	// Export requests
+	mux.HandleFunc("/requests/export", handleExportRequests(store))
+
+	// Replay a request
+	mux.HandleFunc("/replay/", handleReplay(store))
+
+	// Stats
+	mux.HandleFunc("/stats", handleStats(stats))
+
+	return mux
 }

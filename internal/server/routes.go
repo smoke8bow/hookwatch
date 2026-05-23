@@ -1,36 +1,32 @@
 package server
 
-import (
-	"net/http"
+import "net/http"
 
-	"github.com/user/hookwatch/internal/storage"
-)
-
-func NewRouter(store *storage.Store, stats *Stats) http.Handler {
+// NewRouter wires all HTTP routes to their respective handlers.
+func NewRouter(h *Handler) http.Handler {
 	mux := http.NewServeMux()
 
-	h := NewHandler(store, stats)
+	// Capture incoming webhooks on any path under /hook/
+	mux.HandleFunc("/hook/", h.handleCaptureWebhook)
 
-	// Capture incoming webhooks
-	mux.HandleFunc("/webhook/", h.CaptureWebhook)
+	// Inspect captured requests
+	mux.HandleFunc("/requests", h.handleListRequests)
+	mux.HandleFunc("/requests/", h.handleGetRequest)
 
-	// List all captured requests
-	mux.HandleFunc("/requests", h.ListRequests)
+	// Filter requests by method, path prefix, or header
+	mux.HandleFunc("/filter", h.handleFilterRequests)
 
-	// Get a specific request by ID
-	mux.HandleFunc("/requests/", h.GetRequest)
+	// Full-text search across body, headers, and path
+	mux.HandleFunc("/search", h.handleSearchRequests)
 
-	// Filter requests
-	mux.HandleFunc("/requests/filter", handleFilterRequests(store))
+	// Replay a captured request to a target URL
+	mux.HandleFunc("/replay/", h.handleReplay)
 
-	// Export requests
-	mux.HandleFunc("/requests/export", handleExportRequests(store))
+	// Export captured requests as JSON or NDJSON
+	mux.HandleFunc("/export", handleExportRequests(h.store))
 
-	// Replay a request
-	mux.HandleFunc("/replay/", handleReplay(store))
-
-	// Stats
-	mux.HandleFunc("/stats", handleStats(stats))
+	// Aggregated stats
+	mux.HandleFunc("/stats", h.handleStats)
 
 	return mux
 }

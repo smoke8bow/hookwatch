@@ -1,23 +1,25 @@
 package server
 
 import (
-	"net/http"
-
-	"hookwatch/internal/storage"
+	"github.com/go-chi/chi/v5"
+	"github.com/go-chi/chi/v5/middleware"
 )
 
-// NewRouter builds and returns the application's HTTP router.
-func NewRouter(store *storage.Store) http.Handler {
-	h := NewHandler(store)
+func NewRouter(h *Handler) *chi.Mux {
+	r := chi.NewRouter()
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 
-	mux := http.NewServeMux()
+	// Webhook capture endpoint
+	r.Post("/hooks/{path:.*}", h.handleCapture)
 
-	// Webhook capture endpoint — accepts any method under /hooks/
-	mux.HandleFunc("/hooks/", h.CaptureWebhook)
+	// Request inspection endpoints
+	r.Get("/requests", h.handleListRequests)
+	r.Get("/requests/filter", h.handleFilterRequests)
+	r.Get("/requests/{id}", h.handleGetRequest)
 
-	// Inspection API
-	mux.HandleFunc("GET /api/requests", h.ListRequests)
-	mux.HandleFunc("GET /api/requests/{id}", h.GetRequest)
+	// Replay endpoint
+	r.Post("/requests/{id}/replay", h.handleReplay)
 
-	return mux
+	return r
 }
